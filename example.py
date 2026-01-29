@@ -5,14 +5,23 @@ import cv2
 import imageio
 from PIL import Image
 import torch
+import argparse
 from trellis2.pipelines import Trellis2ImageTo3DPipeline
 from trellis2.utils import render_utils
 from trellis2.renderers import EnvMap
 import o_voxel
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--image_path', type=str, required=True)
+parser.add_argument('--output_path', type=str, required=True)
+parser.add_argument('--hdri_path', type=str, required=True)
+parser.add_argument('--output_name', type=str, required=True)
+args = parser.parse_args()
+
+
 # 1. Setup Environment Map
 envmap = EnvMap(torch.tensor(
-    cv2.cvtColor(cv2.imread('assets/hdri/forest.exr', cv2.IMREAD_UNCHANGED), cv2.COLOR_BGR2RGB),
+    cv2.cvtColor(cv2.imread(args.hdri_path, cv2.IMREAD_UNCHANGED), cv2.COLOR_BGR2RGB),
     dtype=torch.float32, device='cuda'
 ))
 
@@ -21,13 +30,13 @@ pipeline = Trellis2ImageTo3DPipeline.from_pretrained("microsoft/TRELLIS.2-4B")
 pipeline.cuda()
 
 # 3. Load Image & Run
-image = Image.open("assets/example_image/T.png")
+image = Image.open(args.image_path)
 mesh = pipeline.run(image)[0]
 mesh.simplify(16777216) # nvdiffrast limit
 
 # 4. Render Video
 video = render_utils.make_pbr_vis_frames(render_utils.render_video(mesh, envmap=envmap))
-imageio.mimsave("sample.mp4", video, fps=15)
+imageio.mimsave(os.path.join(args.output_path, args.output_name + ".mp4"), video, fps=15)
 
 # 5. Export to GLB
 glb = o_voxel.postprocess.to_glb(
@@ -45,4 +54,4 @@ glb = o_voxel.postprocess.to_glb(
     remesh_project      =   0,
     verbose             =   True
 )
-glb.export("sample.glb", extension_webp=True)
+glb.export(os.path.join(args.output_path, args.output_name + ".glb"), extension_webp=True)
